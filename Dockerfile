@@ -16,4 +16,5 @@ COPY html /opt/echoip/html
 COPY data /opt/echoip/data
 
 WORKDIR /opt/echoip
-ENTRYPOINT ["/opt/echoip/echoip -a data/asn.mmdb -c data/city.mmdb -f data/country.mmdb -H x-forwarded-for -r -p -C 10000"]
+ENTRYPOINT ["/opt/echoip/echoip", "-a", "data/asn.mmdb", "-c", "data/city.mmdb", "-f", "data/country.mmdb", "-H", "x-forwarded-for", "-r", "-p", "-C", "10000"]
+
