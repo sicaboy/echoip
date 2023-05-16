@@ -4,7 +4,7 @@ OS := $(shell uname)
 ifeq ($(OS),Linux)
 	TAR_OPTS := --wildcards
 endif
-XGOARCH := amd64
+XGOARCH := arm64
 XGOOS := linux
 XBIN := $(XGOOS)_$(XGOARCH)/echoip
 

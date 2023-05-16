@@ -5,6 +5,22 @@
 A simple service for looking up your IP address. This is the code that powers
 https://ifconfig.co.
 
+## Local Dev & Run
+```shell
+$ make run
+```
+
+## Local Build & Run
+```shell
+$ go build -o echoip cmd/echoip/main.go
+$ ./echoip  -a data/asn.mmdb -c data/city.mmdb -f data/country.mmdb -H x-forwarded-for -r -p -C 10000
+```
+
+## Docker Build & Publish (Multi-Arch)
+```shell
+$ docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t sicaboy/echoip --push .
+```
+
 ## Usage
 
 Just the business, please:
