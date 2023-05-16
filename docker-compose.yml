@@ -5,6 +5,7 @@ services:
     build:
       context: ./
       dockerfile: prod.Dockerfile
+    restart: unless-stopped
     ports:
       - '8067:8080'
     networks:
