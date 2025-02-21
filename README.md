@@ -10,6 +10,9 @@ https://ifconfig.co.
 $ make run
 ```
 
+## DB
+https://github.com/P3TERX/GeoLite.mmdb
+
 ## Local Build & Run
 ```shell
 $ go build -o echoip cmd/echoip/main.go
