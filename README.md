@@ -21,6 +21,11 @@ $ ./echoip  -a data/asn.mmdb -c data/city.mmdb -f data/country.mmdb -H x-forward
 
 ## Docker Build & Publish (Multi-Arch)
 ```shell
+Preparation:
+$ docker buildx create --use --name mybuilder
+$ docker buildx inspect --bootstrap
+------
+Build & Publish:
 $ docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t sicaboy/echoip --push .
 ```
 
