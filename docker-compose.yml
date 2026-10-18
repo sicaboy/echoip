@@ -8,10 +8,20 @@ services:
     restart: unless-stopped
     ports:
       - '8067:8080'
+    volumes:
+      - ./data:/opt/echoip/data:ro
+    entrypoint: ["/opt/echoip/echoip", "-a", "data/current/asn.mmdb", "-c", "data/current/city.mmdb", "-f", "data/current/country.mmdb", "-H", "x-forwarded-for", "-r", "-p", "-C", "10000"]
     networks:
       - caddy
+
+ updater:
+    build:
+      context: ./
+      dockerfile: updater.Dockerfile
+    profiles: ["maintenance"]
+    volumes:
+      - ./data:/data
 
 networks:
   caddy:
     external: true
-

@@ -10,8 +10,36 @@ https://ifconfig.co.
 $ make run
 ```
 
-## DB
-https://github.com/P3TERX/GeoLite.mmdb
+## Database updates (Docker Compose)
+
+The `updater` service downloads City, Country and ASN databases from
+[P3TERX/GeoLite.mmdb](https://github.com/P3TERX/GeoLite.mmdb). All three files
+must pass MaxMind database verification before `data/current` is switched
+atomically. The preceding release remains available through `data/previous`.
+The application mounts `data` read-only and must restart to load the new files.
+A failed download or validation leaves the current release untouched.
+
+Run on the Docker host (requires Docker Compose and `flock`):
+
+```sh
+sudo sh scripts/update-geoip.sh
+```
+
+For the first deployment, build the application image before running the script:
+
+```sh
+sudo docker compose build echoip
+sudo sh scripts/update-geoip.sh
+```
+
+Weekly cron example (Monday 04:20, server timezone):
+
+```cron
+20 4 * * 1 cd /home/ubuntu/echoip && sudo -n sh scripts/update-geoip.sh >> /home/ubuntu/echoip/data/updater.log 2>&1
+```
+
+The script prevents overlapping runs, builds/runs the updater, and recreates or
+restarts echoip to load the published databases and clear its response cache.
 
 ## Local Build & Run
 ```shell
