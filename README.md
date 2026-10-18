@@ -91,7 +91,8 @@ $ curl ifconfig.co/port/80
 {
   "ip": "127.0.0.1",
   "port": 80,
-  "reachable": false
+  "reachable": false,
+  "status": "refused"
 }
 ```
 
@@ -166,6 +167,7 @@ Usage of echoip:
         Path to GeoIP country database
   -l string
         Listening address (default ":8080")
+  -L    Disable custom IP lookup
   -p    Enable port lookup
   -r    Perform reverse hostname lookups
   -s    Show sponsor logo

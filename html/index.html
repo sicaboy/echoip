@@ -31,6 +31,11 @@
         </div>
         {{ end }}
         <h1 class="site-title">❯ curl {{ .Host }}</h1>
+        {{ if .NoCustomIP }}
+        <div class="ip-form">
+          <input class="ip-input" type="text" value="{{ .IP }}" readonly>
+        </div>
+        {{ else }}
         <form class="ip-form" action="/" method="GET">
           <input class="ip-input" type="text" name="ip" value="{{ .IP }}">
           <div class="ip-buttons">
@@ -40,6 +45,7 @@
             {{ end }}
           </div>
         </form>
+        {{ end }}
         <p class="ip-meta">
           {{- if .City }}{{ .City }}{{ if .Country }}, {{ end }}{{ end -}}
           {{- .Country -}}
@@ -222,7 +228,9 @@
         <div class="note">
           <ul>
             <li>Set the <code>Accept: application/json</code> header to request response as JSON.</li>
+            {{ if not .NoCustomIP }}
             <li>Append <code>?ip=IP</code> to the request URL to lookup information for a different IP. This is not supported for the <code>/port</code> endpoint.</li>
+            {{ end }}
           </ul>
         </div>
         <h3>JSON</h3>

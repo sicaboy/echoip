@@ -35,6 +35,7 @@ func main() {
 	listen := flag.String("l", ":8080", "Listening address")
 	reverseLookup := flag.Bool("r", false, "Perform reverse hostname lookups")
 	portLookup := flag.Bool("p", false, "Enable port lookup")
+	noCustomIP := flag.Bool("L", false, "Disable custom IP lookup")
 	template := flag.String("t", "html", "Path to template dir")
 	cacheSize := flag.Int("C", 0, "Size of response cache. Set to 0 to disable")
 	profile := flag.Bool("P", false, "Enables profiling handlers")
@@ -70,6 +71,10 @@ func main() {
 	if *sponsor {
 		log.Println("Enabling sponsor logo")
 		server.Sponsor = *sponsor
+	}
+	if *noCustomIP {
+		log.Println("Disabling custom IP lookup")
+		server.NoCustomIP = true
 	}
 	if len(headers) > 0 {
 		log.Printf("Trusting remote IP from header(s): %s", headers.String())

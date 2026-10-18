@@ -165,9 +165,9 @@ func TestJSONHandlers(t *testing.T) {
 		{s.URL + "/port/foo", "{\n  \"status\": 400,\n  \"error\": \"invalid port: foo\"\n}", 400},
 		{s.URL + "/port/0", "{\n  \"status\": 400,\n  \"error\": \"invalid port: 0\"\n}", 400},
 		{s.URL + "/port/65537", "{\n  \"status\": 400,\n  \"error\": \"invalid port: 65537\"\n}", 400},
-		{s.URL + "/port/31337", "{\n  \"ip\": \"127.0.0.1\",\n  \"port\": 31337,\n  \"reachable\": true\n}", 200},
-		{s.URL + "/port/80", "{\n  \"ip\": \"127.0.0.1\",\n  \"port\": 80,\n  \"reachable\": true\n}", 200},            // checking that our test server is reachable on port 80
-		{s.URL + "/port/80?ip=1.3.3.7", "{\n  \"ip\": \"127.0.0.1\",\n  \"port\": 80,\n  \"reachable\": true\n}", 200}, // ensuring that the "ip" parameter is not usable to check remote host ports
+		{s.URL + "/port/31337", "{\n  \"ip\": \"127.0.0.1\",\n  \"port\": 31337,\n  \"reachable\": true,\n  \"status\": \"open\"\n}", 200},
+		{s.URL + "/port/80", "{\n  \"ip\": \"127.0.0.1\",\n  \"port\": 80,\n  \"reachable\": true,\n  \"status\": \"open\"\n}", 200},            // checking that our test server is reachable on port 80
+		{s.URL + "/port/80?ip=1.3.3.7", "{\n  \"ip\": \"127.0.0.1\",\n  \"port\": 80,\n  \"reachable\": true,\n  \"status\": \"open\"\n}", 200}, // ensuring that the "ip" parameter is not usable to check remote host ports
 		{s.URL + "/foo", "{\n  \"status\": 404,\n  \"error\": \"404 page not found\"\n}", 404},
 		{s.URL + "/health", `{"status":"OK"}`, 200},
 	}
@@ -281,6 +281,99 @@ func testIpFromRequest(t *testing.T, tests []ipTestCase) {
 		if !ip.Equal(out) {
 			t.Errorf("Expected %s, got %s", out, ip)
 		}
+	}
+}
+
+func TestIPFromRequestCustomIPDisabled(t *testing.T) {
+	var tests = []struct {
+		remoteAddr     string
+		headerKey      string
+		headerValue    string
+		trustedHeaders []string
+		out            string
+	}{
+		// When customIP is false, ?ip= parameter should be ignored and remote addr used
+		{"127.0.0.1:9999?ip=1.2.3.4", "", "", nil, "127.0.0.1"},
+		{"127.0.0.1:9999?ip=1.2.3.4", "X-Forwarded-For", "1.3.3.7,4.2.4.2", []string{"X-Forwarded-For"}, "1.3.3.7"},
+		{"[::1]:9999?ip=::ffff:102:304", "", "", nil, "::1"},
+		{"[::1]:9999?ip=::ffff:102:304", "X-Forwarded-For", "::ffff:103:307,::ffff:402:402", []string{"X-Forwarded-For"}, "::ffff:103:307"},
+		// Without ?ip= parameter, behaviour is unchanged
+		{"127.0.0.1:9999", "", "", nil, "127.0.0.1"},
+		{"127.0.0.1:9999", "X-Real-IP", "1.3.3.7", []string{"X-Real-IP"}, "1.3.3.7"},
+	}
+	for _, tt := range tests {
+		u, err := url.Parse("http://" + tt.remoteAddr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := &http.Request{
+			RemoteAddr: u.Host,
+			Header:     http.Header{},
+			URL:        u,
+		}
+		r.Header.Add(tt.headerKey, tt.headerValue)
+		ip, err := ipFromRequest(tt.trustedHeaders, r, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := net.ParseIP(tt.out)
+		if !ip.Equal(out) {
+			t.Errorf("Expected %s, got %s", out, ip)
+		}
+	}
+}
+
+func TestCLIHandlersNoCustomIP(t *testing.T) {
+	log.SetOutput(ioutil.Discard)
+	server := testServer()
+	server.NoCustomIP = true
+	s := httptest.NewServer(server.Handler())
+
+	var tests = []struct {
+		url    string
+		out    string
+		status int
+	}{
+		// ?ip= parameter should be ignored; server returns its own IP (127.0.0.1)
+		{s.URL + "/ip?ip=1.2.3.4", "127.0.0.1\n", 200},
+		{s.URL + "/ip", "127.0.0.1\n", 200},
+		{s.URL + "/country?ip=1.2.3.4", "Elbonia\n", 200},
+	}
+
+	for _, tt := range tests {
+		out, status, err := httpGet(tt.url, "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status != tt.status {
+			t.Errorf("Expected %d for %s, got %d", tt.status, tt.url, status)
+		}
+		if out != tt.out {
+			t.Errorf("Expected %q for %s, got %q", tt.out, tt.url, out)
+		}
+	}
+}
+
+func TestJSONHandlersNoCustomIP(t *testing.T) {
+	log.SetOutput(ioutil.Discard)
+	server := testServer()
+	server.NoCustomIP = true
+	s := httptest.NewServer(server.Handler())
+
+	// With NoCustomIP, ?ip=1.3.3.7 should be ignored; the response should
+	// contain the actual client IP (127.0.0.1), not the requested one.
+	out, status, err := httpGet(s.URL+"/json?ip=1.3.3.7", jsonMediaType, "curl/7.2.6.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != 200 {
+		t.Errorf("Expected 200, got %d", status)
+	}
+	if !strings.Contains(out, `"ip": "127.0.0.1"`) {
+		t.Errorf("Expected response to contain 127.0.0.1, got %q", out)
+	}
+	if strings.Contains(out, "1.3.3.7") {
+		t.Errorf("Expected response to NOT contain 1.3.3.7, got %q", out)
 	}
 }
 

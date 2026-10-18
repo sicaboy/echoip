@@ -2,12 +2,15 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"net/http/pprof"
 
@@ -35,6 +38,7 @@ type Server struct {
 	gr         geo.Reader
 	profile    bool
 	Sponsor    bool
+	NoCustomIP bool
 }
 
 type Response struct {
@@ -57,10 +61,21 @@ type Response struct {
 	UserAgent  *useragent.UserAgent `json:"user_agent,omitempty"`
 }
 
+type PortStatus string
+
+const (
+	PortOpen        PortStatus = "open"        // TCP handshake completed
+	PortRefused     PortStatus = "refused"     // RST (nothing listening)
+	PortTimeout     PortStatus = "timeout"     // Packet dropped
+	PortUnreachable PortStatus = "unreachable" // Host/Network Unreachable
+	PortUnknown     PortStatus = "unknown"     // Unhandled error
+)
+
 type PortResponse struct {
-	IP        net.IP `json:"ip"`
-	Port      uint64 `json:"port"`
-	Reachable bool   `json:"reachable"`
+	IP        net.IP     `json:"ip"`
+	Port      uint64     `json:"port"`
+	Reachable bool       `json:"reachable"`
+	Status    PortStatus `json:"status"` // Strict enum
 }
 
 func New(db geo.Reader, cache *Cache, profile bool) *Server {
@@ -129,7 +144,7 @@ func userAgentFromRequest(r *http.Request) *useragent.UserAgent {
 }
 
 func (s *Server) newResponse(r *http.Request) (Response, error) {
-	ip, err := ipFromRequest(s.IPHeaders, r, true)
+	ip, err := ipFromRequest(s.IPHeaders, r, !s.NoCustomIP)
 	if err != nil {
 		return Response{}, err
 	}
@@ -185,15 +200,31 @@ func (s *Server) newPortResponse(r *http.Request) (PortResponse, error) {
 		return PortResponse{Port: port}, err
 	}
 	err = s.LookupPort(ip, port)
+
+	status := PortUnknown
+	if err == nil {
+		status = PortOpen
+	} else {
+		switch {
+		case os.IsTimeout(err):
+			status = PortTimeout
+		case errors.Is(err, syscall.ECONNREFUSED):
+			status = PortRefused
+		case errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETUNREACH):
+			status = PortUnreachable
+		}
+	}
+
 	return PortResponse{
 		IP:        ip,
 		Port:      port,
 		Reachable: err == nil,
+		Status:    status,
 	}, nil
 }
 
 func (s *Server) CLIHandler(w http.ResponseWriter, r *http.Request) *appError {
-	ip, err := ipFromRequest(s.IPHeaders, r, true)
+	ip, err := ipFromRequest(s.IPHeaders, r, !s.NoCustomIP)
 	if err != nil {
 		return badRequest(err).WithMessage(err.Error()).AsJSON()
 	}
@@ -364,6 +395,7 @@ func (s *Server) DefaultHandler(w http.ResponseWriter, r *http.Request) *appErro
 		Port           bool
 		Sponsor        bool
 		ExplicitLookup bool
+		NoCustomIP     bool
 	}{
 		response,
 		r.Host,
@@ -374,7 +406,8 @@ func (s *Server) DefaultHandler(w http.ResponseWriter, r *http.Request) *appErro
 		string(json),
 		s.LookupPort != nil,
 		s.Sponsor,
-		r.URL.Query().Has("ip"),
+		!s.NoCustomIP && r.URL.Query().Has("ip"),
+		s.NoCustomIP,
 	}
 	if err := t.Execute(w, &data); err != nil {
 		return internalServerError(err)
